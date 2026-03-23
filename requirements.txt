@@ -1,0 +1,33 @@
+# Pre-Claim Denial Preventer - Dependencies
+# ==========================================
+
+# --- LangChain Orchestration ---
+langchain>=0.3.14
+langchain-community>=0.3.14
+langchain-chroma>=0.2.2
+langchain-openai>=0.3.0
+
+# --- Vector Database ---
+chromadb>=0.6.3
+
+# --- PDF Parsing ---
+pymupdf>=1.25.3
+pymupdf4llm>=0.0.17
+
+# --- Structured Data (ICD-11 Excel) ---
+pandas>=2.2.3
+openpyxl>=3.1.5
+
+# --- Embeddings ---
+sentence-transformers>=3.4.1
+langchain-huggingface>=0.1.2
+
+# --- Environment Management ---
+python-dotenv>=1.0.1
+
+# --- UI Framework ---
+streamlit>=1.41.1
+
+# --- Evaluation ---
+ragas
+datasets

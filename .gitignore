@@ -21,13 +21,12 @@ env/
 
 # Environment variables / API keys
 .env
-*.env
+!.env.example
 
-# ChromaDB local storage
-chroma_db/
-
-# Data files (large / sensitive)
-data/
+# Data files (large / sensitive - track structure via .gitkeep)
+data/**
+!data/**/
+!data/**/.gitkeep
 
 # OS
 .DS_Store
