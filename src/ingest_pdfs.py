@@ -152,18 +152,18 @@ def load_and_chunk_pdfs(directory_path: str) -> list[Document]:
         filepath = os.path.join(directory_path, filename)
         provider = _detect_provider(filename)
 
-        print(f"  → Processing: {filename}  (provider: {provider})")
+        print(f"  -> Processing: {filename}  (provider: {provider})")
 
         # ── Convert PDF → Markdown ──────────────────────────────────
         try:
             markdown_text = pymupdf4llm.to_markdown(filepath)
         except Exception as e:
-            print(f"    ⚠ Failed to parse {filename}: {e}")
+            print(f"    WARNING: Failed to parse {filename}: {e}")
             continue
 
         # ── Structural chunking ─────────────────────────────────────
         chunks = _chunk_markdown(markdown_text)
-        print(f"    ✓ {len(chunks)} chunks created")
+        print(f"    DONE {len(chunks)} chunks created")
 
         for chunk_text in chunks:
             section_header = _extract_header(chunk_text)

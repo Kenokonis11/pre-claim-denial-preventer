@@ -6,6 +6,7 @@ filtering so that only the selected insurance provider's rules
 (plus universal DSM-5 / ICD-11 references) are retrieved.
 """
 
+import math
 import os
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -14,11 +15,11 @@ from langchain_core.documents import Document
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
-# Map UI dropdown labels → metadata values used during ingestion
+# Map UI dropdown labels to metadata values used during ingestion
 PROVIDER_LABELS = {
-    "HUSKY":              "HUSKY",
-    "Anthem":             "Anthem",
-    "Cigna":              "Cigna",
+    "HUSKY": "HUSKY",
+    "Anthem": "Anthem",
+    "Cigna": "Cigna",
     "Health New England": "Health New England",
     "General/Not Listed": "LOCUS",
 }
@@ -47,7 +48,6 @@ class ClinicalRetriever:
         print(f"[Retriever] Loaded ChromaDB from {persist_directory}")
         print(f"[Retriever] Collection size: {self._db._collection.count()}")
 
-    # ── Primary retrieval method ────────────────────────────────────
     def get_relevant_context(
         self,
         query: str,
@@ -56,62 +56,45 @@ class ClinicalRetriever:
     ) -> list[Document]:
         """
         Retrieve the most relevant documents for *query*, filtered to:
-          • ICD-11 rows       (always included)
-          • DSM-5 chunks      (always included)
-          • The selected insurance provider's chunks only
-
-        Parameters
-        ----------
-        query : str
-            The clinical search query (built from diagnosis + symptoms + treatment).
-        insurance_provider : str
-            One of the keys in PROVIDER_LABELS, or the raw metadata value.
-        top_k : int
-            Number of results to return.
-
-        Returns
-        -------
-        list[Document]
+          - ICD-11 rows       (always included)
+          - DSM-5 chunks      (always included)
+          - The selected insurance provider's chunks only
         """
-        # Resolve UI label → metadata value
         provider_value = PROVIDER_LABELS.get(insurance_provider, insurance_provider)
+        top_k = max(1, top_k)
+        insurance_k = max(1, math.ceil(top_k * 0.66))
+        diagnostic_k = max(1, top_k - insurance_k)
 
-        # Force top_k=4 for insurance_provider and top_k=2 for DSM-5/ICD-11
-        insurance_results = self._db.similarity_search(
+        insurance_docs = self._db.similarity_search(
             query=query,
-            k=4,
+            k=insurance_k,
             filter={"insurance_provider": provider_value},
         )
-        
-        general_results = self._db.similarity_search(
+
+        diagnostic_docs = self._db.similarity_search(
             query=query,
-            k=2,
+            k=diagnostic_k,
             filter={
                 "$or": [
                     {"source": "ICD-11"},
-                    {"insurance_provider": "DSM-5"}
+                    {"insurance_provider": "DSM-5"},
                 ]
-            }
+            },
         )
 
-        return insurance_results + general_results
+        return (insurance_docs + diagnostic_docs)[:top_k]
 
-    # ── Context formatter for the LLM ───────────────────────────────
     @staticmethod
     def format_context(documents: list[Document]) -> str:
         """
         Convert retrieved Documents into a labelled string the LLM
         can reference for citations.
-
-        Format per chunk:
-            [Source: <filename> | Section: <header>]
-            <content>
         """
         if not documents:
             return "(No relevant context found.)"
 
         sections: list[str] = []
-        for i, doc in enumerate(documents, 1):
+        for doc in documents:
             meta = doc.metadata
             source = meta.get("source", "Unknown")
             section = meta.get("section", meta.get("code", "N/A"))
@@ -127,14 +110,12 @@ class ClinicalRetriever:
         return "\n\n---\n\n".join(sections)
 
 
-# ── Testing Block ───────────────────────────────────────────────────
 if __name__ == "__main__":
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     persist_dir = os.path.join(project_root, "data", "chroma_db")
 
     retriever = ClinicalRetriever(persist_directory=persist_dir)
 
-    # ── Test 1: HUSKY + IOP ─────────────────────────────────────────
     print("\n" + "=" * 70)
     print("TEST 1: 'Intensive Outpatient Program criteria'  |  Provider: HUSKY")
     print("=" * 70)
@@ -147,11 +128,9 @@ if __name__ == "__main__":
     formatted1 = retriever.format_context(docs1)
     print(formatted1)
 
-    # Show source breakdown
     sources1 = [d.metadata.get("insurance_provider", d.metadata.get("source")) for d in docs1]
-    print(f"\n→ Source breakdown: {sources1}")
+    print(f"\nSource breakdown: {sources1}")
 
-    # ── Test 2: Cigna + ASD ─────────────────────────────────────────
     print("\n" + "=" * 70)
     print("TEST 2: 'Autism Spectrum Disorder diagnostic codes'  |  Provider: Cigna")
     print("=" * 70)
@@ -165,4 +144,4 @@ if __name__ == "__main__":
     print(formatted2)
 
     sources2 = [d.metadata.get("insurance_provider", d.metadata.get("source")) for d in docs2]
-    print(f"\n→ Source breakdown: {sources2}")
+    print(f"\nSource breakdown: {sources2}")
